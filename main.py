@@ -93,3 +93,27 @@ def receive_ticket(event: TicketEvent, background_tasks: BackgroundTasks):
 def get_status(ticket_id: str):
     return {"ticket_id": ticket_id, "status": STATUS.get(ticket_id, "unknown"),
             "result": READY_FOR_AGENT.get(ticket_id) or BLOCKED.get(ticket_id)}
+
+from fastapi import Header, HTTPException
+
+@app.post("/webhooks/tickets")
+def receive_ticket(event: TicketEvent, background_tasks: BackgroundTasks,
+                   x_webhook_token: str | None = Header(default=None)):
+    if x_webhook_token != os.environ.get("WEBHOOK_TOKEN", "test-token"):
+        raise HTTPException(status_code=401, detail="unauthorized webhook")
+    # ... rest unchanged (idempotency + ack 202) ...
+    if event.ticket_id in SEEN:
+        return JSONResponse(status_code=200,
+            content={"ticket_id": event.ticket_id, "status": "duplicate_ignored"})
+    SEEN.add(event.ticket_id)
+    STATUS[event.ticket_id] = "processing"
+    background_tasks.add_task(process_ticket, event)
+    return JSONResponse(status_code=202,
+        content={"ticket_id": event.ticket_id, "status": "accepted"})
+
+@app.get("/tickets/{ticket_id}")
+def get_status(ticket_id: str, x_api_key: str | None = Header(default=None)):
+    if x_api_key != os.environ.get("AGENT_API_KEY", "test-key"):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return {"ticket_id": ticket_id, "status": STATUS.get(ticket_id, "unknown"),
+            "result": READY_FOR_AGENT.get(ticket_id) or BLOCKED.get(ticket_id)}
