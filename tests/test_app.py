@@ -23,7 +23,7 @@ def test_health():
 def test_valid_webhook_accepted():
     r = client.post("/webhooks/tickets", json={
         "ticket_id": "T1", "customer_name": "A", "subject": "s", "message": "m"})
-    assert r.status_code == 200
+    assert r.status_code == 202
 
 def test_missing_field_rejected():
     r = client.post("/webhooks/tickets", json={
