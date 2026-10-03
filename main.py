@@ -39,3 +39,28 @@ def validate_draft(draft: str):
     if hard:
         return {"status": "BLOCKED", "reasons": hard}
     return {"status": "SEND_TO_HUMAN", "flags": [n for n, c in SOFT_FLAGS.items() if c(draft)]}
+
+import os, time, random
+
+_POOL = [
+    "Hi {name}, thanks for reaching out. I'm sorry your refund hasn't arrived yet. "
+    "I've asked our team to look into your order and someone will follow up shortly.",
+    "Hi {name}, good news - your refund has been approved and will be processed today.",
+    "Hi {name}, refunds usually take 5-7 business days after processing.",
+]
+
+def draft_reply(event: "TicketEvent") -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        from anthropic import Anthropic           # real SDK, only when a key exists
+        client = Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-sonnet-5", max_tokens=300, temperature=0.7,
+            system="You are a support agent. Never promise refunds you can't keep.",
+            messages=[{"role": "user",
+                       "content": f"Subject: {event.subject}\n\n{event.message}"}])
+        return resp.content[0].text
+    time.sleep(0.1)                                # mock: offline + free
+    return random.choice(_POOL).format(name=event.customer_name)
+
+
