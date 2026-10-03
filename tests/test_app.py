@@ -29,3 +29,21 @@ def test_missing_field_rejected():
     r = client.post("/webhooks/tickets", json={
         "ticket_id": "T1", "customer_name": "A", "subject": "s"})  # no message
     assert r.status_code == 422
+
+# --- Module 5 -----------------------------------------------------------
+from main import validate_draft
+
+def test_refund_promise_blocked():
+    v = validate_draft("Hi, your refund has been approved and will be processed today.")
+    assert v["status"] == "BLOCKED"
+    assert "unauthorized_refund_promise" in v["reasons"]
+
+def test_empty_blocked():
+    assert validate_draft("   ")["status"] == "BLOCKED"
+
+def test_clean_passes():
+    assert validate_draft("Hi, thanks for reaching out, we'll look into it.")["status"] == "SEND_TO_HUMAN"
+
+def test_timeframe_flagged():
+    v = validate_draft("Refunds take 5-7 business days.")
+    assert "specific_timeframe_promised" in v["flags"]
