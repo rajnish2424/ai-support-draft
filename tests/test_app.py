@@ -66,3 +66,13 @@ def test_duplicate_ignored():
     assert r2.json()["status"] == "duplicate_ignored"
     # processed exactly once, into exactly one bucket:
     assert ("T3" in m.READY_FOR_AGENT) ^ ("T3" in m.BLOCKED)
+
+# --- Module 7 -----------------------------------------------------------
+def test_webhook_rejects_bad_token():
+    r = client.post("/webhooks/tickets", json={
+        "ticket_id": "T4", "customer_name": "A", "subject": "s", "message": "m"})
+    assert r.status_code == 401  # no token
+
+def test_status_requires_api_key():
+    r = client.get("/tickets/T1")  # no key
+    assert r.status_code == 401
