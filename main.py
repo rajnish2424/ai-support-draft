@@ -63,4 +63,33 @@ def draft_reply(event: "TicketEvent") -> str:
     time.sleep(0.1)                                # mock: offline + free
     return random.choice(_POOL).format(name=event.customer_name)
 
+from fastapi import BackgroundTasks
+from fastapi.responses import JSONResponse
 
+READY_FOR_AGENT, BLOCKED, STATUS, SEEN = {}, {}, {}, set()
+
+def process_ticket(event: TicketEvent):
+    draft = draft_reply(event)
+    verdict = validate_draft(draft)
+    if verdict["status"] == "BLOCKED":
+        BLOCKED[event.ticket_id] = {"draft": draft, "reasons": verdict["reasons"]}
+        STATUS[event.ticket_id] = "blocked"
+    else:
+        READY_FOR_AGENT[event.ticket_id] = {"draft": draft, "flags": verdict["flags"]}
+        STATUS[event.ticket_id] = "ready_for_agent"
+
+@app.post("/webhooks/tickets")
+def receive_ticket(event: TicketEvent, background_tasks: BackgroundTasks):
+    if event.ticket_id in SEEN:                           # idempotency
+        return JSONResponse(status_code=200,
+            content={"ticket_id": event.ticket_id, "status": "duplicate_ignored"})
+    SEEN.add(event.ticket_id)
+    STATUS[event.ticket_id] = "processing"
+    background_tasks.add_task(process_ticket, event)      # do slow work AFTER replying
+    return JSONResponse(status_code=202,
+        content={"ticket_id": event.ticket_id, "status": "accepted"})
+
+@app.get("/tickets/{ticket_id}")
+def get_status(ticket_id: str):
+    return {"ticket_id": ticket_id, "status": STATUS.get(ticket_id, "unknown"),
+            "result": READY_FOR_AGENT.get(ticket_id) or BLOCKED.get(ticket_id)}
