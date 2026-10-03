@@ -47,3 +47,8 @@ def test_clean_passes():
 def test_timeframe_flagged():
     v = validate_draft("Refunds take 5-7 business days.")
     assert "specific_timeframe_promised" in v["flags"]
+
+# --- Module 4 -----------------------------------------------------------
+def test_draft_reply_is_pluggable(monkeypatch):
+    monkeypatch.setattr(m, "draft_reply", lambda e: "Hi, we'll look into your order.")
+    assert m.draft_reply(None) == "Hi, we'll look into your order."
