@@ -52,3 +52,17 @@ def test_timeframe_flagged():
 def test_draft_reply_is_pluggable(monkeypatch):
     monkeypatch.setattr(m, "draft_reply", lambda e: "Hi, we'll look into your order.")
     assert m.draft_reply(None) == "Hi, we'll look into your order."
+
+# --- Module 6 -----------------------------------------------------------
+def test_webhook_acks_202():
+    r = client.post("/webhooks/tickets", json={
+        "ticket_id": "T2", "customer_name": "A", "subject": "s", "message": "m"})
+    assert r.status_code == 202
+
+def test_duplicate_ignored():
+    body = {"ticket_id": "T3", "customer_name": "A", "subject": "s", "message": "m"}
+    client.post("/webhooks/tickets", json=body)
+    r2 = client.post("/webhooks/tickets", json=body)
+    assert r2.json()["status"] == "duplicate_ignored"
+    # processed exactly once, into exactly one bucket:
+    assert ("T3" in m.READY_FOR_AGENT) ^ ("T3" in m.BLOCKED)
